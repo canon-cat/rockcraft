@@ -38,13 +38,21 @@ def expressjs_extension(mock_extensions):
 
 @pytest.fixture
 def app_path(tmp_path):
-    app_path = tmp_path / "app"
+    return _create_app_path(tmp_path, "app")
+
+
+@pytest.fixture
+def package_json_file(app_path) -> None:
+    _create_package_json_file(app_path)
+
+
+def _create_app_path(path, name):
+    app_path = path / name
     app_path.mkdir(parents=True, exist_ok=True)
     return app_path
 
 
-@pytest.fixture
-def package_json_file(app_path):
+def _create_package_json_file(app_path):
     (app_path / "package.json").write_text(
         f"""{{
     "name": "{_expressjs_project_name}",
@@ -346,10 +354,54 @@ def test_expressjs_extension_default(
 
 
 @pytest.mark.usefixtures("expressjs_extension")
+def test_expressjs_top_level_package_json(tmp_path, expressjs_input_yaml):
+    _create_package_json_file(tmp_path)
+    applied = extensions.apply_extensions(tmp_path, expressjs_input_yaml)
+    assert applied["parts"]["expressjs-framework/install-app"]["source"] == "./"
+
+
+@pytest.mark.usefixtures("expressjs_extension")
 def test_expressjs_no_package_json_error(tmp_path, expressjs_input_yaml):
     with pytest.raises(ExtensionError) as exc:
         extensions.apply_extensions(tmp_path, expressjs_input_yaml)
-    assert str(exc.value) == "missing package.json file in 'app' directory"
+    assert str(exc.value) == "missing package.json file"
+    assert (
+        str(exc.value.doc_slug)
+        == "/reference/extensions/express-framework/#project-requirements"
+    )
+
+
+@pytest.mark.usefixtures("expressjs_extension")
+def test_expressjs_directory_package_json_error(tmp_path, expressjs_input_yaml):
+    (tmp_path / "package.json").mkdir(parents=True, exist_ok=True)
+    with pytest.raises(ExtensionError) as exc:
+        extensions.apply_extensions(tmp_path, expressjs_input_yaml)
+    assert str(exc.value) == "missing package.json file"
+    assert (
+        str(exc.value.doc_slug)
+        == "/reference/extensions/express-framework/#project-requirements"
+    )
+
+
+@pytest.mark.usefixtures("expressjs_extension")
+def test_expressjs_hidden_package_json_error(tmp_path, expressjs_input_yaml):
+    _create_package_json_file(_create_app_path(tmp_path, ".hidden"))
+    with pytest.raises(ExtensionError) as exc:
+        extensions.apply_extensions(tmp_path, expressjs_input_yaml)
+    assert str(exc.value) == "missing package.json file"
+    assert (
+        str(exc.value.doc_slug)
+        == "/reference/extensions/express-framework/#project-requirements"
+    )
+
+
+@pytest.mark.usefixtures("expressjs_extension")
+def test_expressjs_multiple_package_json_error(tmp_path, expressjs_input_yaml):
+    _create_package_json_file(_create_app_path(tmp_path, "one"))
+    _create_package_json_file(_create_app_path(tmp_path, "two"))
+    with pytest.raises(ExtensionError) as exc:
+        extensions.apply_extensions(tmp_path, expressjs_input_yaml)
+    assert str(exc.value) == "multiple package.json files"
     assert (
         str(exc.value.doc_slug)
         == "/reference/extensions/express-framework/#project-requirements"
@@ -359,7 +411,7 @@ def test_expressjs_no_package_json_error(tmp_path, expressjs_input_yaml):
 @pytest.mark.parametrize(
     ("package_json_path", "package_json_contents", "error_message"),
     [
-        ("invalid-path", "", "missing package.json file in 'app' directory"),
+        ("invalid-path", "", "missing package.json file"),
         ("package.json", "[]", "invalid package.json file"),
         (
             "package.json",

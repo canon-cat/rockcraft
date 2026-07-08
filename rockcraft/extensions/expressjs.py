@@ -17,6 +17,7 @@
 """An extension for the NodeJS based Javascript application extension."""
 
 import json
+from pathlib import Path
 from typing import Any, cast
 
 from typing_extensions import override
@@ -33,7 +34,7 @@ USER_UID: int = SUPPORTED_GLOBAL_USERNAMES["_daemon_"]["uid"]
 class ExpressJSFramework(Extension):
     """An extension for constructing Javascript applications based on the ExpressJS framework."""
 
-    IMAGE_BASE_DIR = "app"
+    PACKAGE_JSON = "package.json"
 
     @staticmethod
     @override
@@ -67,7 +68,7 @@ class ExpressJSFramework(Extension):
                     "override": "replace",
                     "startup": "enabled",
                     "user": "_daemon_",
-                    "working-dir": f"/{self.IMAGE_BASE_DIR}",
+                    "working-dir": "/app",
                     "environment": {
                         "NODE_ENV": "production",
                     },
@@ -144,7 +145,7 @@ class ExpressJSFramework(Extension):
         """
         install_app_part: dict[str, Any] = {
             "plugin": "npm",
-            "source": f"{self.IMAGE_BASE_DIR}/",
+            "source": f"{self._source_root}/",
             "override-build": (
                 "rm -rf node_modules\n"
                 "craftctl default\n"
@@ -227,16 +228,56 @@ class ExpressJSFramework(Extension):
         return self.yaml_data["base"]
 
     @property
-    def _app_package_json(self) -> dict[str, Any]:
-        """Return the app package.json contents."""
-        package_json_file = self.project_root / self.IMAGE_BASE_DIR / "package.json"
-        if not package_json_file.exists():
+    def _source_root(self) -> str:
+        """Return relative path to the source tree root directory."""
+        parent = self._package_json_file.parent
+        if self.project_root == parent:
+            return "."
+        return str(parent.relative_to(self.project_root))
+
+    @property
+    def _package_json_file(self) -> Path:
+        """Return package.json path.
+
+        Search for package.json in the project root directory first.
+        If not found, search non-hidden subdirectories exactly one level deep.
+
+        Returns:
+            Path: path to the discovered package.json file;
+
+        Raises:
+            ExtensionError If the file is missing entirely, or if multiple
+                           package.json files are found in the subdirectories.
+
+        """
+        root_package_json = self.project_root / self.PACKAGE_JSON
+        if root_package_json.is_file():
+            return root_package_json
+
+        package_json = None
+        for path in self.project_root.glob(f"[!.]*/{self.PACKAGE_JSON}"):
+            if path.is_file():
+                if package_json is not None:  # more than one found: error
+                    raise ExtensionError(
+                        "multiple package.json files",
+                        doc_slug="/reference/extensions/express-framework/#project-requirements",
+                        logpath_report=False,
+                    )
+                package_json = path
+
+        if package_json is None:
             raise ExtensionError(
-                "missing package.json file in 'app' directory",
+                "missing package.json file",
                 doc_slug="/reference/extensions/express-framework/#project-requirements",
                 logpath_report=False,
             )
-        package_json_contents = package_json_file.read_text(encoding="utf-8")
+
+        return package_json
+
+    @property
+    def _app_package_json(self) -> dict[str, Any]:
+        """Return the app package.json contents."""
+        package_json_contents = self._package_json_file.read_text(encoding="utf-8")
         try:
             app_package_json = json.loads(package_json_contents)
             if not isinstance(app_package_json, dict):
