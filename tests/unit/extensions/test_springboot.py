@@ -590,6 +590,7 @@ def test_factory_dispatch_v1(tmp_path):
     instance = SpringBootFrameworkFactory(
         project_root=tmp_path,
         yaml_data={"name": "x", "base": "ubuntu@24.04"},
+        extension_name="spring-boot-framework",
     )
     assert isinstance(instance, SpringBootFramework)
     assert not isinstance(instance, SpringBootFrameworkV2)
@@ -605,6 +606,7 @@ def test_factory_dispatch_v2(tmp_path):
     instance = SpringBootFrameworkFactory(
         project_root=tmp_path,
         yaml_data={"name": "x", "base": "ubuntu@26.04"},
+        extension_name="spring-boot-framework",
     )
     assert isinstance(instance, SpringBootFrameworkV2)
 
