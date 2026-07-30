@@ -797,13 +797,17 @@ def test_flask_framework_factory_dispatch(tmp_path):
     )
 
     v1 = FlaskFrameworkFactory(
-        project_root=tmp_path, yaml_data={"name": "x", "base": "ubuntu@22.04"}
+        project_root=tmp_path,
+        yaml_data={"name": "x", "base": "ubuntu@22.04"},
+        extension_name="flask-framework",
     )
     assert isinstance(v1, FlaskFramework)
     assert not isinstance(v1, FlaskFrameworkV2)
 
     v2 = FlaskFrameworkFactory(
-        project_root=tmp_path, yaml_data={"name": "x", "base": "ubuntu@26.04"}
+        project_root=tmp_path,
+        yaml_data={"name": "x", "base": "ubuntu@26.04"},
+        extension_name="flask-framework",
     )
     assert isinstance(v2, FlaskFrameworkV2)
 
@@ -1169,6 +1173,7 @@ def test_django_factory_dispatch_v1(tmp_path):
     instance = factory(
         project_root=tmp_path,
         yaml_data={"name": "x", "base": "ubuntu@22.04"},
+        extension_name="django-framework",
     )
     assert isinstance(instance, extensions.DjangoFramework)
     assert not isinstance(instance, extensions.DjangoFrameworkV2)
@@ -1180,6 +1185,7 @@ def test_django_factory_dispatch_v2(tmp_path):
     instance = factory(
         project_root=tmp_path,
         yaml_data={"name": "x", "base": "ubuntu@26.04"},
+        extension_name="django-framework",
     )
     assert isinstance(instance, extensions.DjangoFrameworkV2)
 

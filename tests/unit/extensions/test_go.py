@@ -281,11 +281,19 @@ def test_go_extension_extra_assets_overridden(tmp_path, go_input_yaml):
 
 def test_go_framework_factory_dispatch(tmp_path):
     factory = extensions.GoFrameworkFactory
-    v1 = factory(project_root=tmp_path, yaml_data={"name": "x", "base": "ubuntu@24.04"})
+    v1 = factory(
+        project_root=tmp_path,
+        yaml_data={"name": "x", "base": "ubuntu@24.04"},
+        extension_name="go-framework",
+    )
     assert isinstance(v1, extensions.GoFramework)
     assert not isinstance(v1, extensions.GoFrameworkV2)
 
-    v2 = factory(project_root=tmp_path, yaml_data={"name": "x", "base": "ubuntu@26.04"})
+    v2 = factory(
+        project_root=tmp_path,
+        yaml_data={"name": "x", "base": "ubuntu@26.04"},
+        extension_name="go-framework",
+    )
     assert isinstance(v2, extensions.GoFrameworkV2)
 
 

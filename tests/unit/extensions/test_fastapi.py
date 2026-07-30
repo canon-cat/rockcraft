@@ -337,7 +337,9 @@ def test_fastapi_extension_incorrect_prime_prefix_error(tmp_path, fastapi_input_
 def test_factory_dispatch_v1(tmp_path):
     """Factory returns FastAPIFramework (V1) for ubuntu@24.04."""
     instance = extensions.FastAPIFrameworkFactory(
-        project_root=tmp_path, yaml_data={"name": "x", "base": "ubuntu@24.04"}
+        project_root=tmp_path,
+        yaml_data={"name": "x", "base": "ubuntu@24.04"},
+        extension_name="fastapi-framework",
     )
     assert isinstance(instance, extensions.FastAPIFramework)
     assert not isinstance(instance, extensions.FastAPIFrameworkV2)
@@ -346,7 +348,9 @@ def test_factory_dispatch_v1(tmp_path):
 def test_factory_dispatch_v2(tmp_path):
     """Factory returns FastAPIFrameworkV2 for ubuntu@26.04."""
     instance = extensions.FastAPIFrameworkFactory(
-        project_root=tmp_path, yaml_data={"name": "x", "base": "ubuntu@26.04"}
+        project_root=tmp_path,
+        yaml_data={"name": "x", "base": "ubuntu@26.04"},
+        extension_name="fastapi-framework",
     )
     assert isinstance(instance, extensions.FastAPIFrameworkV2)
 
