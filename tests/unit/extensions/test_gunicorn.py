@@ -20,6 +20,11 @@ from typing import Any
 import pytest
 from rockcraft import extensions
 from rockcraft.errors import ExtensionError
+from rockcraft.extensions.gunicorn import (
+    FlaskFramework,
+    FlaskFrameworkFactory,
+    FlaskFrameworkV2,
+)
 
 
 @pytest.fixture
@@ -37,6 +42,16 @@ def flask_input_yaml_fixture():
     }
 
 
+@pytest.fixture(name="flask_v2_input_yaml")
+def flask_v2_input_yaml_fixture():
+    return {
+        "name": "foo-bar",
+        "base": "ubuntu@26.04",
+        "platforms": {"amd64": {}},
+        "extensions": ["flask-framework"],
+    }
+
+
 @pytest.fixture
 def django_extension(mock_extensions, monkeypatch):
     monkeypatch.setenv("ROCKCRAFT_ENABLE_EXPERIMENTAL_EXTENSIONS", "1")
@@ -48,6 +63,16 @@ def django_input_yaml_fixture():
     return {
         "name": "foo-bar",
         "base": "ubuntu@22.04",
+        "platforms": {"amd64": {}},
+        "extensions": ["django-framework"],
+    }
+
+
+@pytest.fixture(name="django_v2_input_yaml")
+def django_v2_input_yaml_fixture():
+    return {
+        "name": "foo-bar",
+        "base": "ubuntu@26.04",
         "platforms": {"amd64": {}},
         "extensions": ["django-framework"],
     }
@@ -790,33 +815,52 @@ def test_flask_extension_app_in_non_matching_directory(tmp_path):
 
 def test_flask_framework_factory_dispatch(tmp_path):
     """Test that FlaskFrameworkFactory dispatches to the correct class by base."""
-    from rockcraft.extensions.gunicorn import (
-        FlaskFramework,
-        FlaskFrameworkFactory,
-        FlaskFrameworkV2,
-    )
-
     v1 = FlaskFrameworkFactory(
-        project_root=tmp_path, yaml_data={"name": "x", "base": "ubuntu@22.04"}
+        project_root=tmp_path,
+        yaml_data={"name": "x", "base": "ubuntu@22.04"},
+        extension_name="flask-framework",
     )
     assert isinstance(v1, FlaskFramework)
     assert not isinstance(v1, FlaskFrameworkV2)
 
     v2 = FlaskFrameworkFactory(
-        project_root=tmp_path, yaml_data={"name": "x", "base": "ubuntu@26.04"}
+        project_root=tmp_path,
+        yaml_data={"name": "x", "base": "ubuntu@26.04"},
+        extension_name="flask-framework",
+    )
+    assert isinstance(v2, FlaskFrameworkV2)
+
+
+def test_flask_framework_factory_dispatch_bare_by_build_base(tmp_path):
+    """Test that a bare rock's build-base selects the Flask framework version."""
+    v1 = FlaskFrameworkFactory(
+        project_root=tmp_path,
+        yaml_data={
+            "name": "x",
+            "base": "bare",
+            "build-base": "ubuntu@24.04",
+        },
+        extension_name="flask-framework",
+    )
+    assert isinstance(v1, FlaskFramework)
+    assert not isinstance(v1, FlaskFrameworkV2)
+
+    v2 = FlaskFrameworkFactory(
+        project_root=tmp_path,
+        yaml_data={
+            "name": "x",
+            "base": "bare",
+            "build-base": "ubuntu@26.04",
+        },
+        extension_name="flask-framework",
     )
     assert isinstance(v2, FlaskFrameworkV2)
 
 
 def test_flask_framework_v2_supported_bases():
     """Test FlaskFrameworkV2 and FlaskFrameworkFactory supported bases."""
-    from rockcraft.extensions.gunicorn import (
-        FlaskFramework,
-        FlaskFrameworkFactory,
-        FlaskFrameworkV2,
-    )
-
     assert "ubuntu@26.04" in FlaskFrameworkV2.get_supported_bases()
+    assert "bare" in FlaskFrameworkV2.get_supported_bases()
 
     factory_bases = FlaskFrameworkFactory.get_supported_bases()
     assert "ubuntu@26.04" in factory_bases
@@ -844,8 +888,8 @@ def test_flask_v2_full_apply_26_04(tmp_path, monkeypatch):
     }
 
     applied = extensions.apply_extensions(tmp_path, flask_input_yaml_26)
-    source = applied["parts"]["flask-framework/config-files"]["source"]
-    del applied["parts"]["flask-framework/config-files"]["source"]
+    source = applied["parts"]["flask-framework.config-files"]["source"]
+    del applied["parts"]["flask-framework.config-files"]["source"]
     suffix = "share/rockcraft/extensions/flask-framework"
     assert source[-len(suffix) :].replace("\\", "/") == suffix
 
@@ -853,7 +897,7 @@ def test_flask_v2_full_apply_26_04(tmp_path, monkeypatch):
         "name": "foo-bar",
         "base": "ubuntu@26.04",
         "parts": {
-            "flask-framework/config-files": {
+            "flask-framework.config-files": {
                 "organize": {
                     "gunicorn.conf.py": "flask/gunicorn.conf.py",
                 },
@@ -866,16 +910,16 @@ def test_flask_v2_full_apply_26_04(tmp_path, monkeypatch):
                     }
                 ],
             },
-            "flask-framework/dependencies": {
+            "flask-framework.dependencies": {
                 "plugin": "python",
-                "python-packages": ["gunicorn~=23.0"],
+                "python-packages": ["gunicorn~=26.0"],
                 "python-requirements": ["requirements.txt"],
                 "source": ".",
                 "stage-packages": ["python3-venv"],
                 "build-environment": [],
                 "stage": ["-etc/ssl/certs/ca-certificates.crt"],
             },
-            "flask-framework/install-app": {
+            "flask-framework.install-app": {
                 "organize": {
                     "app.py": "flask/app/app.py",
                     "static": "flask/app/static",
@@ -891,11 +935,11 @@ def test_flask_v2_full_apply_26_04(tmp_path, monkeypatch):
                     },
                 ],
             },
-            "flask-framework/runtime": {
+            "flask-framework.runtime": {
                 "plugin": "nil",
                 "stage-packages": ["ca-certificates_data"],
             },
-            "flask-framework/logging": {
+            "flask-framework.logging": {
                 "plugin": "nil",
                 "override-build": (
                     "craftctl default\n"
@@ -913,11 +957,11 @@ def test_flask_v2_full_apply_26_04(tmp_path, monkeypatch):
                     },
                 ],
             },
-            "flask-framework/statsd-exporter": {
+            "flask-framework.statsd-exporter": {
                 "build-snaps": ["go"],
                 "plugin": "go",
                 "source": "https://github.com/prometheus/statsd_exporter.git",
-                "source-tag": "v0.26.0",
+                "source-tag": "v0.30.0",
             },
         },
         "platforms": {"amd64": {}},
@@ -1158,16 +1202,16 @@ def test_django_extension_django_service_override_disable_wsgi_path_check(tmp_pa
     extensions.apply_extensions(tmp_path, input_yaml)
 
 
-def test_flask_extension_uv(tmp_path, flask_extension, flask_input_yaml):
+def test_flask_extension_uv(tmp_path, flask_extension, flask_v2_input_yaml):
     (tmp_path / "pyproject.toml").write_text(
         "[project]\nname = 'foo-bar'\nversion = '0.1.0'\ndependencies = ['flask']\n"
     )
     (tmp_path / "uv.lock").write_text("version = 1\n")
     (tmp_path / "app.py").write_text("app = object()")
 
-    applied = extensions.apply_extensions(tmp_path, flask_input_yaml)
+    applied = extensions.apply_extensions(tmp_path, flask_v2_input_yaml)
 
-    deps = applied["parts"]["flask-framework/dependencies"]
+    deps = applied["parts"]["flask-framework.dependencies"]
     assert deps["plugin"] == "uv"
     assert deps["source"] == "."
     assert deps["stage-packages"] == ["python3-venv"]
@@ -1175,7 +1219,7 @@ def test_flask_extension_uv(tmp_path, flask_extension, flask_input_yaml):
     assert "python-requirements" not in deps
     assert deps["override-build"] == (
         "craftctl default\n"
-        "uv pip install --python ${CRAFT_PART_INSTALL}/bin/python gunicorn~=23.0"
+        "uv pip install --python /usr/bin/python3 --prefix ${CRAFT_PART_INSTALL} gunicorn~=26.0"
     )
     # non-bare base still excludes the ca-certificates crt from the deps stage
     assert deps["stage"] == ["-etc/ssl/certs/ca-certificates.crt"]
@@ -1192,7 +1236,7 @@ def test_flask_extension_uv_lock_without_pyproject_errors(
     assert "both uv.lock and pyproject.toml" in str(exc.value)
 
 
-def test_django_extension_uv(tmp_path, django_extension, django_input_yaml):
+def test_django_extension_uv(tmp_path, django_extension, django_v2_input_yaml):
     (tmp_path / "pyproject.toml").write_text(
         "[project]\nname = 'foo-bar'\nversion = '0.1.0'\ndependencies = ['django']\n"
     )
@@ -1201,19 +1245,19 @@ def test_django_extension_uv(tmp_path, django_extension, django_input_yaml):
     wsgi_dir.mkdir(parents=True)
     (wsgi_dir / "wsgi.py").write_text("application = object()")
 
-    applied = extensions.apply_extensions(tmp_path, django_input_yaml)
+    applied = extensions.apply_extensions(tmp_path, django_v2_input_yaml)
 
-    deps = applied["parts"]["django-framework/dependencies"]
+    deps = applied["parts"]["django-framework.dependencies"]
     assert deps["plugin"] == "uv"
     assert deps["override-build"] == (
         "craftctl default\n"
-        "uv pip install --python ${CRAFT_PART_INSTALL}/bin/python gunicorn~=23.0"
+        "uv pip install --python /usr/bin/python3 --prefix ${CRAFT_PART_INSTALL} gunicorn~=26.0"
     )
     assert "python-requirements" not in deps
 
 
 def test_django_extension_uv_no_requirements_txt_is_ok(
-    tmp_path, django_extension, django_input_yaml
+    tmp_path, django_extension, django_v2_input_yaml
 ):
     # A uv project with no requirements.txt must NOT raise the
     # "missing requirements.txt" error.
@@ -1226,7 +1270,9 @@ def test_django_extension_uv_no_requirements_txt_is_ok(
     (wsgi_dir / "wsgi.py").write_text("application = object()")
 
     # Should not raise.
-    extensions.apply_extensions(tmp_path, django_input_yaml)
+    extensions.apply_extensions(tmp_path, django_v2_input_yaml)
+
+
 # ---------------------------------------------------------------------------
 # DjangoFrameworkV2 / django_framework_factory tests
 # ---------------------------------------------------------------------------
@@ -1238,6 +1284,7 @@ def test_django_factory_dispatch_v1(tmp_path):
     instance = factory(
         project_root=tmp_path,
         yaml_data={"name": "x", "base": "ubuntu@22.04"},
+        extension_name="django-framework",
     )
     assert isinstance(instance, extensions.DjangoFramework)
     assert not isinstance(instance, extensions.DjangoFrameworkV2)
@@ -1249,13 +1296,42 @@ def test_django_factory_dispatch_v2(tmp_path):
     instance = factory(
         project_root=tmp_path,
         yaml_data={"name": "x", "base": "ubuntu@26.04"},
+        extension_name="django-framework",
     )
     assert isinstance(instance, extensions.DjangoFrameworkV2)
 
 
+def test_django_factory_dispatch_bare_by_build_base(tmp_path):
+    """Factory selects the Django framework version from a bare rock's build-base."""
+    factory = extensions.DjangoFrameworkFactory
+    v1 = factory(
+        project_root=tmp_path,
+        yaml_data={
+            "name": "x",
+            "base": "bare",
+            "build-base": "ubuntu@24.04",
+        },
+        extension_name="django-framework",
+    )
+    assert isinstance(v1, extensions.DjangoFramework)
+    assert not isinstance(v1, extensions.DjangoFrameworkV2)
+
+    v2 = factory(
+        project_root=tmp_path,
+        yaml_data={
+            "name": "x",
+            "base": "bare",
+            "build-base": "ubuntu@26.04",
+        },
+        extension_name="django-framework",
+    )
+    assert isinstance(v2, extensions.DjangoFrameworkV2)
+
+
 def test_django_framework_v2_supported_bases():
-    """DjangoFrameworkV2 only supports ubuntu@26.04."""
+    """DjangoFrameworkV2 supports ubuntu@26.04 and bare rocks."""
     assert "ubuntu@26.04" in extensions.DjangoFrameworkV2.get_supported_bases()
+    assert "bare" in extensions.DjangoFrameworkV2.get_supported_bases()
     assert "ubuntu@22.04" not in extensions.DjangoFrameworkV2.get_supported_bases()
 
 
@@ -1283,8 +1359,8 @@ def test_django_extension_v2_default(tmp_path):
 
     applied = extensions.apply_extensions(tmp_path, django_input_yaml)
 
-    source = applied["parts"]["django-framework/config-files"]["source"]
-    del applied["parts"]["django-framework/config-files"]["source"]
+    source = applied["parts"]["django-framework.config-files"]["source"]
+    del applied["parts"]["django-framework.config-files"]["source"]
     suffix = "share/rockcraft/extensions/django-framework"
     assert source[-len(suffix) :].replace("\\", "/") == suffix
 
@@ -1292,7 +1368,7 @@ def test_django_extension_v2_default(tmp_path):
         "name": "foo-bar",
         "base": "ubuntu@26.04",
         "parts": {
-            "django-framework/config-files": {
+            "django-framework.config-files": {
                 "organize": {"gunicorn.conf.py": "django/gunicorn.conf.py"},
                 "plugin": "dump",
                 "permissions": [
@@ -1303,16 +1379,16 @@ def test_django_extension_v2_default(tmp_path):
                     },
                 ],
             },
-            "django-framework/dependencies": {
+            "django-framework.dependencies": {
                 "plugin": "python",
-                "python-packages": ["gunicorn~=23.0"],
+                "python-packages": ["gunicorn~=26.0"],
                 "python-requirements": ["requirements.txt"],
                 "source": ".",
                 "stage-packages": ["python3-venv"],
                 "build-environment": [],
                 "stage": ["-etc/ssl/certs/ca-certificates.crt"],
             },
-            "django-framework/install-app": {
+            "django-framework.install-app": {
                 "organize": {"*": "django/app/", ".*": "django/app/"},
                 "plugin": "dump",
                 "source": "foo_bar",
@@ -1324,11 +1400,11 @@ def test_django_extension_v2_default(tmp_path):
                     },
                 ],
             },
-            "django-framework/runtime": {
+            "django-framework.runtime": {
                 "plugin": "nil",
                 "stage-packages": ["ca-certificates_data"],
             },
-            "django-framework/logging": {
+            "django-framework.logging": {
                 "plugin": "nil",
                 "override-build": (
                     "craftctl default\n"
@@ -1346,11 +1422,11 @@ def test_django_extension_v2_default(tmp_path):
                     },
                 ],
             },
-            "django-framework/statsd-exporter": {
+            "django-framework.statsd-exporter": {
                 "build-snaps": ["go"],
                 "plugin": "go",
                 "source": "https://github.com/prometheus/statsd_exporter.git",
-                "source-tag": "v0.26.0",
+                "source-tag": "v0.30.0",
             },
         },
         "platforms": {"amd64": {}},
